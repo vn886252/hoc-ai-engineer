@@ -109,4 +109,7 @@ if reply.tool_calls:
     print(response_cuoi.choices[0].message.content)
 else:
     print(reply.content)
+
+
+    #testing
     
