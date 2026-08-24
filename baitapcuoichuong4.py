@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import chromadb
 import json
 import os
+import requests
 
 load_dotenv()
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
@@ -21,7 +22,8 @@ if collection.count() == 0:
 
     collection.add(
         documents=["Giá 1 chiếc áo là 170.000đ phí ship 30.000đ",
-                "2 áo là 300.000đ freeship, combo 3 áo là 400.000đ freeship",
+                "2 áo là 300.000đ freeship",
+                "combo 3 áo là 400.000đ freeship",
                 "Khách hàng được kiếm tra hàng trước khi nhận, hàng kém chất lượng hoặc không giống hình cứ hoàn hàng",
                 "size cho áo là từ 55 ký đến 105 ký được phân đều từ size S M L XL, ví dụ: khách hàng 60 ký cao 1m65 thì mặc size S",
                 "size S từ 55kg tới 63kg, size M từ 64kg tới 72kg, size L từ 73kg tới 84kg, size XL là số còn lại",
@@ -32,7 +34,7 @@ if collection.count() == 0:
                 "mẫu áo và quần có hơn 50 mẫu khác nhau",
                 "áo và quần chủ yếu khách hàng là dân tập gym, và có sở thích là cbum, tập thể hình, chú trọng cơ thể khỏe mạnh"
         ],
-        ids=["cau1","cau2","cau3","cau4","cau5","cau6","cau7","cau8","cau9","cau10","cau11"]
+        ids=["cau1","cau2","cau3","cau4","cau5","cau6","cau7","cau8","cau9","cau10","cau11","cau12"]
     )
 # (thêm dữ liệu vào collection nếu chưa có — chỉ cần chạy 1 lần)
 
@@ -62,7 +64,32 @@ def tinh_size(can_nang, chieu_cao):
 
         return size
 
-    
+def tinh_gia(so_luong):
+    if so_luong == 1:
+        tong = 150000 + 30000
+        return f"1 món giá 150.000đ + phí ship 30.000đ = {tong:,}đ"
+    elif so_luong == 2:
+        tong = 300000
+        return f"2 món giá {tong:,}đ (freeship)"
+    elif so_luong == 3:
+        tong = 400000
+        return f"3 món giá {tong:,}đ (freeship)"
+    else:
+        so_mon_them = so_luong - 3
+        tong = 400000 + so_mon_them * 130000
+        return f"{so_luong} món giá {tong:,}đ (freeship) — gồm combo 3 món 400.000đ + {so_mon_them} món thêm x 130.000đ"
+
+def gui_thong_bao_telegram(noi_dung):
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": noi_dung}
+    response = requests.post(url, data=payload)
+    return response.json()
+
+def bao_khong_hieu(cau_hoi_goc):
+    gui_thong_bao_telegram(f"Chatbot không hiểu câu hỏi của khách: {cau_hoi_goc}")
+    return "Mình đã chuyển câu hỏi này cho nhân viên hỗ trợ, sẽ có người liên hệ lại sớm nhé!"
 
 tools = [ 
     {
@@ -107,28 +134,56 @@ tools = [
                 "required":["can_nang","chieu_cao"]
             }
         }
-    }
-    
+    },
+    {
+    "type": "function",
+    "function": {
+        "name": "tinh_gia",
+        "description": "Tính tổng giá tiền dựa trên TỔNG số lượng áo + quần khách muốn mua (áo và quần đồng giá, cộng chung số lượng lại). LUÔN dùng tool này để tính giá cho khách khi biết số lượng cụ thể, KHÔNG được tự cộng/suy luận giá bằng lời văn từ ngữ cảnh.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "so_luong": {"type": "number", "description": "Tổng số lượng áo + quần khách muốn mua, cộng dồn lại thành 1 số"}
+            },
+            "required": ["so_luong"]
+            }
+        }
+}   
 
  ]  # định nghĩa 2 tool theo đúng JSON Schema đã học
 
 app = FastAPI()
 
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
 class CauHoi(BaseModel):
     noi_dung: str
 @app.post("/chatbot")
 def chatbot(cau_hoi: CauHoi):
-    # Bước 1: RAG
     ket_qua_rag = collection.query(query_texts=[cau_hoi.noi_dung], n_results=5)
-    print("NGỮ CẢNH LẤY ĐƯỢC:", ket_qua_rag["documents"][0]) 
     ngu_canh = "\n".join(ket_qua_rag["documents"][0])
+    khoang_cach_gan_nhat = ket_qua_rag["distances"][0][0]
+    print("KHOANG CACH GAN NHAT:", khoang_cach_gan_nhat) 
+
+    NGUONG_LIEN_QUAN = 0.48
+    if khoang_cach_gan_nhat > NGUONG_LIEN_QUAN:
+        bao_khong_hieu(cau_hoi.noi_dung)
+        return {"cau_tra_loi": "Mình đã chuyển câu hỏi này cho nhân viên hỗ trợ, sẽ có người liên hệ lại sớm nhé!"}
+
 
     messages = [
-        {"role": "system", "content": "Trả lời dựa trên ngữ cảnh cung cấp. Nếu ngữ cảnh có đủ thông tin giá, hãy tự tính toán cụ thể, không hỏi lại người dùng thông tin đã có sẵn trong ngữ cảnh, trả lời ngắn gọn không dài dòng."},
+        {"role": "system", "content": """Bạn là trợ lý bán hàng cho shop quần áo tập gym.
+
+            PHẠM VI ĐƯỢC PHÉP trả lời: CHỈ giá, size, chất liệu, chính sách đổi trả của ÁO và QUẦN — dựa ĐÚNG trên thông tin có trong ngữ cảnh.
+
+            QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về sản phẩm/chủ đề KHÔNG được liệt kê trực tiếp trong ngữ cảnh (ví dụ giày, dép, phụ kiện...), bạn TUYỆT ĐỐI KHÔNG được tự suy luận, suy diễn, hay phỏng đoán câu trả lời (kể cả nói "có thể không có" hay "ngữ cảnh không đề cập"). Trong mọi trường hợp đó, bạn PHẢI gọi tool bao_khong_hieu ngay lập tức, không tự trả lời bằng lời văn."""},
         {"role": "user", "content": f"Ngữ cảnh:\n{ngu_canh}\n\nCâu hỏi: {cau_hoi.noi_dung}"}
     ]
 
-    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools)
+    response = client.chat.completions.create(model="gpt-4o", messages=messages, tools=tools)
     reply = response.choices[0].message
 
     if reply.tool_calls:
@@ -144,17 +199,19 @@ def chatbot(cau_hoi: CauHoi):
                 ket_qua = tinh_toan(tham_so["bieu_thuc"])
 
             elif ten_ham == "tinh_size":
-                
                 ket_qua = tinh_size(tham_so["can_nang"], tham_so["chieu_cao"])
-                print("TOOL tinh_size TRẢ VỀ:", ket_qua)
-            # ... xử lý từng tool_call, append kết quả
+
+            elif ten_ham == "tinh_gia":                          # THÊM NHÁNH NÀY
+                ket_qua = tinh_gia(tham_so["so_luong"])
 
             messages.append({
-                        "role":"tool",
-                        "tool_call_id":tool_call.id,
-                        "content": str(ket_qua)
-            })
-        response_cuoi = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
-        return {"cau_tra_loi": response_cuoi.choices[0].message.content}
+                                    "role":"tool",
+                                    "tool_call_id":tool_call.id,
+                                    "content": str(ket_qua)
+                            })
+        response_cuoi = client.chat.completions.create(model="gpt-4o", messages=messages)
+        noi_dung_tra_loi = response_cuoi.choices[0].message.content
     else:
-        return {"cau_tra_loi": reply.content}
+        noi_dung_tra_loi = reply.content
+
+    return {"cau_tra_loi": noi_dung_tra_loi}
