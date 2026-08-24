@@ -91,6 +91,53 @@ def bao_khong_hieu(cau_hoi_goc):
     gui_thong_bao_telegram(f"Chatbot không hiểu câu hỏi của khách: {cau_hoi_goc}")
     return "Mình đã chuyển câu hỏi này cho nhân viên hỗ trợ, sẽ có người liên hệ lại sớm nhé!"
 
+def xu_ly_chatbot(noi_dung_cau_hoi):
+    ket_qua_rag = collection.query(query_texts=[noi_dung_cau_hoi], n_results=5)
+    ngu_canh = "\n".join(ket_qua_rag["documents"][0])
+    khoang_cach_gan_nhat = ket_qua_rag["distances"][0][0]
+
+    NGUONG_LIEN_QUAN = 0.48
+    if khoang_cach_gan_nhat > NGUONG_LIEN_QUAN:
+        bao_khong_hieu(noi_dung_cau_hoi)
+        return "Mình đã chuyển câu hỏi này cho nhân viên hỗ trợ, sẽ có người liên hệ lại sớm nhé!"
+
+    messages = [
+        {"role": "system", "content": "..."},  # giữ nguyên system prompt cũ
+        {"role": "user", "content": f"Ngữ cảnh:\n{ngu_canh}\n\nCâu hỏi: {noi_dung_cau_hoi}"}
+    ]
+
+    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools)
+    reply = response.choices[0].message
+
+    if reply.tool_calls:
+        messages.append(reply)
+        for tool_call in reply.tool_calls:
+            ten_ham = tool_call.function.name
+            tham_so = json.loads(tool_call.function.arguments)
+            if ten_ham == "tra_cuu_thoi_tiet":
+                ket_qua = tra_cuu_thoi_tiet(tham_so["thanh_pho"])
+            elif ten_ham == "tinh_toan":
+                ket_qua = tinh_toan(tham_so["bieu_thuc"])
+            elif ten_ham == "tinh_size":
+                ket_qua = tinh_size(tham_so["can_nang"], tham_so["chieu_cao"])
+            elif ten_ham == "tinh_gia":
+                ket_qua = tinh_gia(tham_so["so_luong"])
+            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(ket_qua)})
+        response_cuoi = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+        return response_cuoi.choices[0].message.content
+    else:
+        return reply.content
+
+def gui_tin_nhan_facebook(sender_id, noi_dung):
+    page_token = os.getenv("FACEBOOK_PAGE_TOKEN")
+    url = f"https://graph.facebook.com/v21.0/me/messages?access_token={page_token}"
+    payload = {
+        "recipient": {"id": sender_id},
+        "message": {"text": noi_dung}
+    }
+    response = requests.post(url, json=payload)
+    return response.json()
+
 tools = [ 
     {
         "type":"function",
@@ -153,14 +200,49 @@ tools = [
  ]  # định nghĩa 2 tool theo đúng JSON Schema đã học
 
 app = FastAPI()
+class CauHoi(BaseModel):
+    noi_dung: str
+
+@app.post("/chatbot")
+def chatbot(cau_hoi: CauHoi):
+    return {"cau_tra_loi": xu_ly_chatbot(cau_hoi.noi_dung)}
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
-class CauHoi(BaseModel):
-    noi_dung: str
+
+VERIFY_TOKEN = "1234567"  # tự đặt, nhớ để dùng lại ở bước sau
+
+@app.get("/webhook")
+def xac_minh_webhook(request: Request):
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return int(challenge)
+    return {"error": "Xac minh that bai"}
+
+
+@app.post("/webhook")
+async def nhan_tin_nhan(request: Request):
+    data = await request.json()
+
+    for entry in data.get("entry", []):
+        for event in entry.get("messaging", []):
+            sender_id = event["sender"]["id"]
+            if "message" in event and "text" in event["message"]:
+                noi_dung_khach = event["message"]["text"]
+
+                # Tái sử dụng đúng logic chatbot đã có
+                cau_tra_loi = xu_ly_chatbot(noi_dung_khach)
+
+                gui_tin_nhan_facebook(sender_id, cau_tra_loi)
+
+    return {"status": "ok"}
+
 @app.post("/chatbot")
 def chatbot(cau_hoi: CauHoi):
     ket_qua_rag = collection.query(query_texts=[cau_hoi.noi_dung], n_results=5)
