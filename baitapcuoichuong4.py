@@ -11,6 +11,8 @@ import os
 import requests
 
 load_dotenv()
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -234,8 +236,7 @@ class CauHoi(BaseModel):
 
 VERIFY_TOKEN = "1234567"
 
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.post("/chatbot")
 def chatbot(cau_hoi: CauHoi):
