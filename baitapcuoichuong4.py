@@ -13,6 +13,7 @@ import requests
 load_dotenv()
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -116,9 +117,13 @@ for ten_nhom, danh_sach_ma in danh_muc_nhom.items():
 def gui_hinh_anh(ma_san_pham):
     if ma_san_pham not in anh_theo_ma:
         return "KHONG_TIM_THAY_ANH"
-    duong_dan = anh_theo_ma[ma_san_pham]
-    if os.path.exists(duong_dan):
-        return f"https://chatbot-ao-thun.onrender.com/{duong_dan}"
+    duong_dan_tuong_doi = anh_theo_ma[ma_san_pham]
+    duong_dan_day_du = os.path.join(BASE_DIR, duong_dan_tuong_doi)
+    print("BASE_DIR:", BASE_DIR)
+    print("DUONG DAN DAY DU:", duong_dan_day_du)
+    print("TON TAI KHONG:", os.path.exists(duong_dan_day_du))
+    if os.path.exists(duong_dan_day_du):
+        return f"https://chatbot-ao-thun.onrender.com/{duong_dan_tuong_doi}"
     return "KHONG_TIM_THAY_ANH"
 
 tools = [
