@@ -4,12 +4,14 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
 import chromadb 
 import json
 import os
 import requests
 
 load_dotenv()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -95,6 +97,29 @@ def gui_tin_nhan_facebook(sender_id, noi_dung):
     response = requests.post(url, json=payload)
     return response.json()
 
+danh_muc_nhom = {
+    "nhom_1": ["1", "5", "4", "6","15","20","17","16","19"],
+    "nhom_2": ["9", "10", "11","12","3","8","14","2","7"],
+    "nhom_3": ["Q1", "Q2", "Q3", "Q4"],
+    "nhom_4": ["21", "22", "23", "24", "W1","W2","28","29","W7"],
+    "nhom_5": ["34", "36", "35", "39", "31","30","32","Q6","Q7"],
+    "nhom_6": ["43", "44", "45", "46", "47"],
+    "bang_size":["bang size","size","bảng size"]
+}
+anh_theo_ma = {}
+for ten_nhom, danh_sach_ma in danh_muc_nhom.items():
+    duong_dan = f"static/products/{ten_nhom}.jpg"
+    for ma in danh_sach_ma:
+        anh_theo_ma[ma] = duong_dan
+
+def gui_hinh_anh(ma_san_pham):
+    if ma_san_pham not in anh_theo_ma:
+        return "KHONG_TIM_THAY_ANH"
+    duong_dan = anh_theo_ma[ma_san_pham]
+    if os.path.exists(duong_dan):
+        return f"https://chatbot-ao-thun.onrender.com/{duong_dan}"
+    return "KHONG_TIM_THAY_ANH"
+
 tools = [
     {
         "type": "function",
@@ -146,6 +171,18 @@ tools = [
                 "required": ["so_luong"]
             }
         }
+    },
+    {
+            "type": "function",
+            "function": {
+                "name": "gui_hinh_anh",
+                "description": "Gửi hình ảnh sản phẩm cho khách xem. Mỗi mẫu áo/quần có mã số riêng (ví dụ 43, Q6, W1). Nếu khách hỏi xem bảng size, dùng mã 'bang size'. Nếu khách không nói rõ mã, hỏi lại khách muốn xem mẫu số mấy.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"ma_san_pham": {"type": "string", "description": "Mã sản phẩm khách muốn xem, ví dụ: 43, Q6, W1, hoặc 'bang size' nếu khách hỏi bảng size"}},
+                    "required": ["ma_san_pham"]
+            }
+        }
     }
 ]
 
@@ -185,6 +222,8 @@ def xu_ly_chatbot(noi_dung_cau_hoi):
                 ket_qua = tinh_size(tham_so["can_nang"], tham_so["chieu_cao"])
             elif ten_ham == "tinh_gia":
                 ket_qua = tinh_gia(tham_so["so_luong"])
+            elif ten_ham == "gui_hinh_anh":
+                ket_qua = gui_hinh_anh(tham_so["ma_san_pham"])
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(ket_qua)})
         response_cuoi = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
         return response_cuoi.choices[0].message.content
