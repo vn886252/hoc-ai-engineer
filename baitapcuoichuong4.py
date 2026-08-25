@@ -215,6 +215,8 @@ def xu_ly_chatbot(noi_dung_cau_hoi):
     response = client.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools)
     reply = response.choices[0].message
 
+    print("CO GOI TOOL KHONG:", reply.tool_calls, flush=True)
+
     if reply.tool_calls:
         messages.append(reply)
         for tool_call in reply.tool_calls:
