@@ -92,12 +92,26 @@ def bao_khong_hieu(cau_hoi_goc):
     gui_thong_bao_telegram(f"Chatbot không hiểu câu hỏi của khách: {cau_hoi_goc}")
     return "Mình đã chuyển câu hỏi này cho nhân viên hỗ trợ, sẽ có người liên hệ lại sớm nhé!"
 
-def gui_tin_nhan_facebook(sender_id, noi_dung):
+def gui_tin_nhan_facebook(sender_id, noi_dung_text, link_anh = None):
     page_token = os.getenv("FACEBOOK_PAGE_TOKEN")
     url = f"https://graph.facebook.com/v21.0/me/messages?access_token={page_token}"
     payload = {"recipient": {"id": sender_id}, "message": {"text": noi_dung}}
+    requests.post(url, json=payload_text)
+    if link_anh:
+            payload_anh ={
+                "recipient":{"id":sender_id},
+                "message":{
+                    "attachment":{
+                        "type":"image",
+                        "payload":{"url":link_anh,"is_reusable": True}
+                    }
+                }
+            }
+            requests.post(url, json=payload_anh)
     response = requests.post(url, json=payload)
     return response.json()
+
+   
 
 danh_muc_nhom = {
     "nhom_1": ["1", "5", "4", "6","15","20","17","16","19"],
@@ -201,6 +215,7 @@ QUY TẮC BẮT BUỘC VỀ HÌNH ẢNH: Khi khách muốn xem hình ảnh/mẫu
 QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời."""
 
 def xu_ly_chatbot(noi_dung_cau_hoi):
+    link_anh = None
 
     tu_khoa_xem_anh = ["xem", "hình", "mẫu", "ảnh", "bảng size"]
     co_the_hoi_anh = any(tu in noi_dung_cau_hoi.lower() for tu in tu_khoa_xem_anh)
@@ -238,6 +253,8 @@ def xu_ly_chatbot(noi_dung_cau_hoi):
                 ket_qua = tinh_gia(tham_so["so_luong"])
             elif ten_ham == "gui_hinh_anh":
                 ket_qua = gui_hinh_anh(tham_so["ma_san_pham"])
+                if ket_qua != "KHONG_TIM_THAY_ANH":
+                    link_anh = ket_qua
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(ket_qua)})
         response_cuoi = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
         return response_cuoi.choices[0].message.content
@@ -273,8 +290,8 @@ async def nhan_tin_nhan(request: Request):
             sender_id = event["sender"]["id"]
             if "message" in event and "text" in event["message"]:
                 noi_dung_khach = event["message"]["text"]
-                cau_tra_loi = xu_ly_chatbot(noi_dung_khach)
-                gui_tin_nhan_facebook(sender_id, cau_tra_loi)
+                cau_tra_loi, link_anh = xu_ly_chatbot(noi_dung_khach)
+                gui_tin_nhan_facebook(sender_id, cau_tra_loi, link_anh)
     return {"status": "ok"}
 
 if __name__ == "__main__":
