@@ -119,9 +119,9 @@ def gui_hinh_anh(ma_san_pham):
         return "KHONG_TIM_THAY_ANH"
     duong_dan_tuong_doi = anh_theo_ma[ma_san_pham]
     duong_dan_day_du = os.path.join(BASE_DIR, duong_dan_tuong_doi)
-    print("BASE_DIR:", BASE_DIR)
-    print("DUONG DAN DAY DU:", duong_dan_day_du)
-    print("TON TAI KHONG:", os.path.exists(duong_dan_day_du))
+    print("BASE_DIR:", BASE_DIR, flush = True)
+    print("DUONG DAN DAY DU:", duong_dan_day_du, flush=True)
+    print("TON TAI KHONG:", os.path.exists(duong_dan_day_du), flush=True)
     if os.path.exists(duong_dan_day_du):
         return f"https://chatbot-ao-thun.onrender.com/{duong_dan_tuong_doi}"
     return "KHONG_TIM_THAY_ANH"
