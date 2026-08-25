@@ -188,9 +188,9 @@ tools = [
 
 SYSTEM_PROMPT = """Bạn là trợ lý bán hàng cho shop quần áo tập gym.
 
-PHẠM VI ĐƯỢC PHÉP trả lời: CHỈ giá, size, chất liệu, chính sách đổi trả của ÁO và QUẦN — dựa ĐÚNG trên thông tin có trong ngữ cảnh.
+PHẠM VI ĐƯỢC PHÉP trả lời: giá, size, chất liệu, chính sách đổi trả của ÁO và QUẦN — dựa ĐÚNG trên thông tin có trong ngữ cảnh. Khi khách muốn xem hình ảnh sản phẩm hoặc bảng size, LUÔN dùng tool gui_hinh_anh với đúng mã sản phẩm khách nhắc tới.
 
-QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về sản phẩm/chủ đề KHÔNG được liệt kê trực tiếp trong ngữ cảnh, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời."""
+QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop (ví dụ giày, dép...), bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời."""
 
 def xu_ly_chatbot(noi_dung_cau_hoi):
     ket_qua_rag = collection.query(query_texts=[noi_dung_cau_hoi], n_results=5)
