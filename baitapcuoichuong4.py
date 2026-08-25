@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request, Query, BackgroundTasks
 from chromadb.utils import embedding_functions
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
@@ -285,15 +285,21 @@ def xac_minh_webhook(
     return PlainTextResponse(content="Xac minh that bai", status_code=403)
 
 @app.post("/webhook")
-async def nhan_tin_nhan(request: Request):
+async def nhan_tin_nhan(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     for entry in data.get("entry", []):
         for event in entry.get("messaging", []):
+            if event.get("message",{}.get("is_echo")):
+                continue
             sender_id = event["sender"]["id"]
             if "message" in event and "text" in event["message"]:
                 noi_dung_khach = event["message"]["text"]
-                cau_tra_loi, link_anh = xu_ly_chatbot(noi_dung_khach)
-                gui_tin_nhan_facebook(sender_id, cau_tra_loi, link_anh)
+                background_tasks.add_task(xu_ly_va_tra_loi, sender_id, noi_dung_khach)
+
+def xu_ly_va_tra_loi(sender_id, noi_dung_khach):
+    cau_tra_loi, link_anh = xu_ly_chatbot(noi_dung_khach)
+    gui_tin_nhan_facebook(sender_id, cau_tra_loi, link_anh)
+
     return {"status": "ok"}
 
 if __name__ == "__main__":
