@@ -95,8 +95,9 @@ def bao_khong_hieu(cau_hoi_goc):
 def gui_tin_nhan_facebook(sender_id, noi_dung_text, link_anh = None):
     page_token = os.getenv("FACEBOOK_PAGE_TOKEN")
     url = f"https://graph.facebook.com/v21.0/me/messages?access_token={page_token}"
-    payload = {"recipient": {"id": sender_id}, "message": {"text": noi_dung}}
+    payload_text = {"recipient": {"id": sender_id}, "message": {"text": noi_dung_text}}
     requests.post(url, json=payload_text)
+
     if link_anh:
             payload_anh ={
                 "recipient":{"id":sender_id},
@@ -108,7 +109,6 @@ def gui_tin_nhan_facebook(sender_id, noi_dung_text, link_anh = None):
                 }
             }
             requests.post(url, json=payload_anh)
-    response = requests.post(url, json=payload)
     return response.json()
 
    
@@ -212,7 +212,10 @@ PHẠM VI ĐƯỢC PHÉP trả lời: giá, size, chất liệu, chính sách đ
 
 QUY TẮC BẮT BUỘC VỀ HÌNH ẢNH: Khi khách muốn xem hình ảnh/mẫu sản phẩm (dù chỉ nói "xem mẫu X", "cho xem áo X"), bạn TUYỆT ĐỐI KHÔNG được tự trả lời bằng lời văn kiểu "không tìm thấy" hay "tôi không có ảnh". Bạn PHẢI LUÔN gọi tool gui_hinh_anh với đúng mã khách nhắc tới trước, để hàm đó tự kiểm tra và quyết định. Không được tự đoán trước kết quả.
 
-QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời."""
+QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời, trả lời ngắn gọn.
+
+"\n\nSau khi dùng tool gui_hinh_anh thành công, KHÔNG viết link ảnh vào câu trả lời (ảnh sẽ tự động được gửi kèm riêng), chỉ trả lời ngắn gọn kiểu 'Đây là mẫu bạn hỏi nhé!'"
+"""
 
 def xu_ly_chatbot(noi_dung_cau_hoi):
     link_anh = None
@@ -226,7 +229,7 @@ def xu_ly_chatbot(noi_dung_cau_hoi):
 
     NGUONG_LIEN_QUAN = 0.48
     if khoang_cach_gan_nhat > NGUONG_LIEN_QUAN and not co_the_hoi_anh:
-        return bao_khong_hieu(noi_dung_cau_hoi)
+        return bao_khong_hieu(noi_dung_cau_hoi), None
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -235,8 +238,6 @@ def xu_ly_chatbot(noi_dung_cau_hoi):
 
     response = client.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools)
     reply = response.choices[0].message
-
-    print("CO GOI TOOL KHONG:", reply.tool_calls, flush=True)
 
     if reply.tool_calls:
         messages.append(reply)
@@ -257,9 +258,9 @@ def xu_ly_chatbot(noi_dung_cau_hoi):
                     link_anh = ket_qua
             messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(ket_qua)})
         response_cuoi = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
-        return response_cuoi.choices[0].message.content
+        return response_cuoi.choices[0].message.content, link_anh
     else:
-        return reply.content
+        return reply.content, link_anh
 
 class CauHoi(BaseModel):
     noi_dung: str
@@ -270,6 +271,7 @@ VERIFY_TOKEN = "1234567"
 
 @app.post("/chatbot")
 def chatbot(cau_hoi: CauHoi):
+    cau_tra_loi, link_anh = xu_ly_chatbot(cau_hoi.noi_dung)
     return {"cau_tra_loi": xu_ly_chatbot(cau_hoi.noi_dung)}
 
 @app.get("/webhook")
