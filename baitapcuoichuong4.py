@@ -201,12 +201,16 @@ QUY TẮC BẮT BUỘC VỀ HÌNH ẢNH: Khi khách muốn xem hình ảnh/mẫu
 QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời."""
 
 def xu_ly_chatbot(noi_dung_cau_hoi):
+
+    tu_khoa_xem_anh = ["xem", "hình", "mẫu", "ảnh", "bảng size"]
+    co_the_hoi_anh = any(tu in noi_dung_cau_hoi.lower() for tu in tu_khoa_xem_anh)
+
     ket_qua_rag = collection.query(query_texts=[noi_dung_cau_hoi], n_results=5)
     ngu_canh = "\n".join(ket_qua_rag["documents"][0])
     khoang_cach_gan_nhat = ket_qua_rag["distances"][0][0]
 
     NGUONG_LIEN_QUAN = 0.48
-    if khoang_cach_gan_nhat > NGUONG_LIEN_QUAN:
+    if khoang_cach_gan_nhat > NGUONG_LIEN_QUAN and not co_the_hoi_anh:
         return bao_khong_hieu(noi_dung_cau_hoi)
 
     messages = [
