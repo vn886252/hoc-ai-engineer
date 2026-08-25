@@ -6,12 +6,14 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
 import chromadb 
+import time
 import json
 import os
 import requests
 
 load_dotenv()
 app = FastAPI()
+_anh_da_gui = {}
 app.mount("/static", StaticFiles(directory="static"), name="static")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -53,9 +55,9 @@ def tinh_toan(bieu_thuc):
         return "Không thể tính biểu thức này vui lòng thử lại biểu thức khác"
 
 def tinh_size(can_nang, chieu_cao):
-    if can_nang < 62:
+    if can_nang < 64:
         size = "S"
-    elif can_nang <= 75:
+    elif can_nang <= 72:
         size = "M"
     elif can_nang <= 84:
         size = "L"
@@ -70,7 +72,7 @@ def tinh_size(can_nang, chieu_cao):
 def tinh_gia(so_luong):
     if so_luong == 1:
         tong = 150000 + 30000
-        return f"1 món giá 150.000đ + phí ship 30.000đ = {tong:,}đ"
+        return f"1 món giá 170.000đ + phí ship 30.000đ = {tong:,}đ"
     elif so_luong == 2:
         return "2 món giá 300.000đ (freeship)"
     elif so_luong == 3:
@@ -98,7 +100,7 @@ def gui_tin_nhan_facebook(sender_id, noi_dung_text, link_anh = None):
     payload_text = {"recipient": {"id": sender_id}, "message": {"text": noi_dung_text}}
     requests.post(url, json=payload_text)
 
-    if link_anh:
+    if link_anh and link_anh != "KHONG_TIM_THAY_ANH":
             payload_anh ={
                 "recipient":{"id":sender_id},
                 "message":{
@@ -109,8 +111,7 @@ def gui_tin_nhan_facebook(sender_id, noi_dung_text, link_anh = None):
                 }
             }
             requests.post(url, json=payload_anh)
-    return response.json()
-
+    return None
    
 
 danh_muc_nhom = {
@@ -208,14 +209,14 @@ tools = [
 
 SYSTEM_PROMPT =  """Bạn là trợ lý bán hàng cho shop quần áo tập gym.
 
-PHẠM VI ĐƯỢC PHÉP trả lời: giá, size, chất liệu, chính sách đổi trả của ÁO và QUẦN — dựa ĐÚNG trên thông tin có trong ngữ cảnh.
+                    PHẠM VI ĐƯỢC PHÉP trả lời: giá, size, chất liệu, chính sách đổi trả của ÁO và QUẦN — dựa ĐÚNG trên thông tin có trong ngữ cảnh.
 
-QUY TẮC BẮT BUỘC VỀ HÌNH ẢNH: Khi khách muốn xem hình ảnh/mẫu sản phẩm (dù chỉ nói "xem mẫu X", "cho xem áo X"), bạn TUYỆT ĐỐI KHÔNG được tự trả lời bằng lời văn kiểu "không tìm thấy" hay "tôi không có ảnh". Bạn PHẢI LUÔN gọi tool gui_hinh_anh với đúng mã khách nhắc tới trước, để hàm đó tự kiểm tra và quyết định. Không được tự đoán trước kết quả.
+                    QUY TẮC BẮT BUỘC VỀ HÌNH ẢNH: Khi khách muốn xem hình ảnh/mẫu sản phẩm (dù chỉ nói "xem mẫu X", "cho xem áo X"), bạn TUYỆT ĐỐI KHÔNG được tự trả lời bằng lời văn kiểu "không tìm thấy" hay "tôi không có ảnh". Bạn PHẢI LUÔN gọi tool gui_hinh_anh với đúng mã khách nhắc tới trước, để hàm đó tự kiểm tra và quyết định. Không được tự đoán trước kết quả.
 
-QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời, trả lời ngắn gọn.
+                    QUY TẮC NGHIÊM NGẶT: Với BẤT KỲ câu hỏi nào về chủ đề KHÔNG liên quan áo/quần của shop, bạn TUYỆT ĐỐI KHÔNG được tự suy luận hay phỏng đoán câu trả lời, trả lời ngắn gọn.
 
-"\n\nSau khi dùng tool gui_hinh_anh thành công, KHÔNG viết link ảnh vào câu trả lời (ảnh sẽ tự động được gửi kèm riêng), chỉ trả lời ngắn gọn kiểu 'Đây là mẫu bạn hỏi nhé!'"
-"""
+                    "\n\nSau khi dùng tool gui_hinh_anh thành công, KHÔNG viết link ảnh vào câu trả lời (ảnh sẽ tự động được gửi kèm riêng), chỉ trả lời ngắn gọn kiểu 'Đây là mẫu bạn hỏi nhé!'"
+                """
 
 def xu_ly_chatbot(noi_dung_cau_hoi):
     link_anh = None
@@ -272,7 +273,7 @@ VERIFY_TOKEN = "1234567"
 @app.post("/chatbot")
 def chatbot(cau_hoi: CauHoi):
     cau_tra_loi, link_anh = xu_ly_chatbot(cau_hoi.noi_dung)
-    return {"cau_tra_loi": xu_ly_chatbot(cau_hoi.noi_dung)}
+    return {"cau_tra_loi":cau_tra_loi, "link_anh": link_anh}
 
 @app.get("/webhook")
 def xac_minh_webhook(
@@ -296,11 +297,18 @@ async def nhan_tin_nhan(request: Request, background_tasks: BackgroundTasks):
                 noi_dung_khach = event["message"]["text"]
                 background_tasks.add_task(xu_ly_va_tra_loi, sender_id, noi_dung_khach)
 
+    return {"status": "ok"}
+
 def xu_ly_va_tra_loi(sender_id, noi_dung_khach):
     cau_tra_loi, link_anh = xu_ly_chatbot(noi_dung_khach)
+    if link_anh and link_anh != "KHONG_TIM_THAY_ANH":
+        prev = _anh_da_gui.get(sender_id)
+        now = time.time()
+        if prev and prev[0] == link_anh and now - prev[1] < 60:
+            link_anh = None
+        else:
+            _anh_da_gui[sender_id] = (link_anh, now)
     gui_tin_nhan_facebook(sender_id, cau_tra_loi, link_anh)
-
-    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
