@@ -13,7 +13,7 @@ import requests
 
 load_dotenv()
 app = FastAPI()
-_anh_da_gui = {}
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -290,7 +290,7 @@ async def nhan_tin_nhan(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     for entry in data.get("entry", []):
         for event in entry.get("messaging", []):
-            if event.get("message",{}.get("is_echo")):
+            if event.get("message",{}).get("is_echo"):
                 continue
             sender_id = event["sender"]["id"]
             if "message" in event and "text" in event["message"]:
@@ -300,6 +300,7 @@ async def nhan_tin_nhan(request: Request, background_tasks: BackgroundTasks):
     return {"status": "ok"}
 
 def xu_ly_va_tra_loi(sender_id, noi_dung_khach):
+    _anh_da_gui = {}
     cau_tra_loi, link_anh = xu_ly_chatbot(noi_dung_khach)
     if link_anh and link_anh != "KHONG_TIM_THAY_ANH":
         prev = _anh_da_gui.get(sender_id)
