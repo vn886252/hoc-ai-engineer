@@ -15,14 +15,14 @@ import facebook  # pip install facebook-sdk
 # ==== Load environment variables ====
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN1 = os.getenv("TELEGRAM_BOT_TOKEN1")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 VERIFY_TOKEN = ("1234")
 
 # ==== Khởi tạo Telegram + Facebook ====
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+bot = Bot(token=TELEGRAM_BOT_TOKEN1)
 graph = facebook.GraphAPI(access_token=FACEBOOK_ACCESS_TOKEN)
 
 # Ghi nhớ tin nhắn đã trả lời trong phiên chạy này (tránh trả lời lặp lại)
