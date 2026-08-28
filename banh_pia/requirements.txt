@@ -1,0 +1,27 @@
+openai
+python-dotenv
+python-telegram-bot
+fastapi
+uvicorn[standard]
+facebook-sdk
+gunicorn
+services:
+  - type: web
+    name: chatbot-banh-pia
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k uvicorn.workers.UvicornWorker chatbot_banhpia_tranmyhuong:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /webhook
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: FACEBOOK_ACCESS_TOKEN
+        sync: false
+      - key: FACEBOOK_PAGE_ID
+        sync: false

@@ -3,6 +3,7 @@ import os
 import time
 import asyncio
 import json
+import re
 import unicodedata
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -52,16 +53,13 @@ def parse_gpt_response(gpt_output: str):
         return None
     if "combo" in text:
         try:
-            combo_count = int(text.split("combo")[0].strip())
+            combo_count = int(re.search(r'(\d+)\s*combo', text).group(1))
             return {"combo": combo_count}
-        except ValueError:
+        except (ValueError, AttributeError):
             return None
-    if "cay" in text or "cây" in gpt_output:
-        try:
-            tree_count = int(text.split("cay")[0].strip())
-            return {"tree": tree_count}
-        except ValueError:
-            return None
+    match = re.search(r'(\d+)\s*(?:cay|cây)', text)
+    if match:
+        return {"tree":int(match.group(1))}
     return None
 
 
@@ -104,18 +102,26 @@ def build_price_reply(user_input: str) -> str:
     remaining_trees = tree_count % 3
 
     if remaining_trees == 2:
-        suggested_tree_count = tree_count + 1
-        suggested_combo_count = suggested_tree_count // 3
+        suggested_combo_count = (tree_count + 1) // 3
         suggested_price = suggested_combo_count * COMBO_PRICE
-        saved = total_tree_price - suggested_price
+        extra_tree_cost = suggested_price - total_tree_price  # 25,000
+        saved_on_extra = PRICE_PER_TREE - extra_tree_cost     # 10,000
         return (
             f"💰 Giá cho {tree_count} cây: {format_vnd(total_tree_price)}.\n\n"
-            f"💡 Gợi ý: Nếu bạn mua thêm 1 cây, bạn sẽ có {suggested_combo_count} combo "
-            f"({suggested_combo_count * 3} cây) với giá {format_vnd(suggested_price)} "
-            f"– tiết kiệm {format_vnd(saved)}!{contact_line}"
+            f"💡 Gợi ý: Mua {suggested_combo_count} combo ({suggested_combo_count * 3} cây) "
+            f"giá {format_vnd(suggested_price)} — bạn được thêm 1 cây chỉ với "
+            f"{format_vnd(extra_tree_cost)} thay vì {format_vnd(PRICE_PER_TREE)} "
+            f"(tiết kiệm {format_vnd(saved_on_extra)})!{contact_line}"
         )
-
-    return f"💰 Giá cho {tree_count} cây: {format_vnd(total_tree_price)}.{contact_line}"
+    if remaining_trees == 0:
+        return (
+            f"💰 Giá cho {tree_count} cây: {format_vnd(total_tree_price)}"
+            f" ({combo_count} combo).{contact_line}"
+        )
+    return (
+        f"💰 Giá cho {tree_count} cây: {format_vnd(total_tree_price)}"
+        f" ({combo_count} combo + 1 cây lẻ).{contact_line}"
+    )
 
 
 def chatbot_response(user_input: str) -> str:
@@ -157,8 +163,8 @@ def handle_webhook(request_data):
             bot_response = chatbot_response(user_message)
 
             graph.put_object(
-                parent_object="me",
-                connection_name="messages",
+                "me",
+                "messages",
                 recipient=json.dumps({"id":sender_id}),
                 message=json.dumps({"text": bot_response})
             )
@@ -188,31 +194,3 @@ if __name__ == "__main__":
     # Chạy FastAPI app
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-async def check_and_reply_once():
-    """Quét conversations 1 lượt, trả lời tin nhắn mới chưa xử lý."""
-    try:
-        messages = graph.get_object(
-            f"{FACEBOOK_PAGE_ID}/conversations", fields="participants,messages"
-        )
-        for conversation in messages.get("data", []):
-            for message in conversation.get("messages", {}).get("data", []):
-                message_id = message.get("id")
-                if message_id in processed_message_ids:
-                    continue
-                if message.get("from", {}).get("id") == FACEBOOK_PAGE_ID:
-                    continue  # bỏ qua tin nhắn do chính page gửi
-
-                user_message = message.get("message", "")
-                print(f"Facebook user: {user_message}")
-                bot_response = chatbot_response(user_message)
-
-                graph.put_object(
-                    f"{FACEBOOK_PAGE_ID}/conversations/{conversation['id']}",
-                    "message",
-                    {"message": bot_response},
-                )
-                processed_message_ids.add(message_id)
-    except Exception as e:
-        await notify_telegram_error(e)
-        print("❌ Có lỗi xảy ra. Đã thông báo qua Telegram. Vui lòng vào chat thật để hỗ trợ.")
